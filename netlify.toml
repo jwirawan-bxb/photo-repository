@@ -1,0 +1,26 @@
+[build]
+  base = "app"
+  publish = "app/dist"
+  command = "npm run build"
+```
+
+5. Scroll down and click **"Commit new file"**
+
+---
+
+## **Step 2: Netlify Will Auto-Rebuild**
+
+Once you commit the file, Netlify will automatically detect the change and rebuild your site!
+
+Check the **"Deploys"** page in a moment and you should see a new build starting. ✅
+
+---
+
+## **Did You Already Create netlify.toml?**
+
+If you already created it, then Netlify should be rebuilding now. Go check the **Deploys** page:
+- `https://app.netlify.com/sites/tiny-kringle-21110e/deploys`
+
+Look for a new "Building" or "Published" deploy. If it's published, visit your site:
+```
+https://tiny-kringle-21110e.netlify.app
