@@ -1,77 +1,125 @@
-import { useState, useEffect, useCallback } from 'react';
-import { 
-  uploadPhoto as uploadPhotoToStorage, 
-  deletePhoto as deletePhotoFromStorage, 
-  fetchPhotos,
-  subscribeToPhotos,
-  clearAllPhotos as clearAllPhotosFromStorage,
-  type Photo
-} from '@/lib/storage';
+import { useEffect, useState } from 'react'
+import { supabase } from '@/lib/supabase'
 
-export { type Photo };
+interface Photo {
+  id: string
+  name: string
+  url: string
+  uploaded_at: string
+}
 
 export function usePhotos() {
-  const [photos, setPhotos] = useState<Photo[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [photos, setPhotos] = useState<Photo[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  // Load initial photos and subscribe to updates
+  // Fetch photos from Supabase on component mount
   useEffect(() => {
-    let mounted = true;
+    fetchPhotos()
+  }, [])
 
-    const loadPhotos = async () => {
-      try {
-        const initialPhotos = await fetchPhotos();
-        if (mounted) {
-          setPhotos(initialPhotos);
-        }
-      } catch (error) {
-        console.error('Failed to load photos:', error);
-      } finally {
-        if (mounted) {
-          setIsLoading(false);
-        }
-      }
-    };
+  const fetchPhotos = async () => {
+    try {
+      setLoading(true)
+      const { data, error } = await supabase
+        .from('photos')
+        .select('*')
+        .order('uploaded_at', { ascending: false })
 
-    loadPhotos();
+      if (error) throw error
+      setPhotos(data || [])
+      setError(null)
+    } catch (err) {
+      console.error('Error fetching photos:', err)
+      setError('Failed to load photos')
+    } finally {
+      setLoading(false)
+    }
+  }
 
-    // Subscribe to updates (polling for changes)
-    const unsubscribe = subscribeToPhotos((updatedPhotos) => {
-      if (mounted) {
-        setPhotos(updatedPhotos);
-      }
-    });
+  const uploadPhoto = async (file: File) => {
+    try {
+      setError(null)
 
-    return () => {
-      mounted = false;
-      unsubscribe();
-    };
-  }, []);
+      // Step 1: Upload image file to Supabase Storage
+      const fileName = `${Date.now()}-${file.name}`
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('photos')
+        .upload(`public/${fileName}`, file)
 
-  const uploadPhoto = useCallback(async (file: File): Promise<void> => {
-    await uploadPhotoToStorage(file);
-    // Refresh photos after upload
-    const updatedPhotos = await fetchPhotos();
-    setPhotos(updatedPhotos);
-  }, []);
+      if (uploadError) throw uploadError
 
-  const deletePhoto = useCallback(async (photoId: string): Promise<void> => {
-    await deletePhotoFromStorage(photoId);
-    // Refresh photos after delete
-    const updatedPhotos = await fetchPhotos();
-    setPhotos(updatedPhotos);
-  }, []);
+      // Step 2: Get the public URL of the uploaded file
+      const { data: urlData } = supabase.storage
+        .from('photos')
+        .getPublicUrl(`public/${fileName}`)
 
-  const clearAllPhotos = useCallback(async (): Promise<void> => {
-    await clearAllPhotosFromStorage();
-    setPhotos([]);
-  }, []);
+      // Step 3: Save the photo data to the database
+      const { error: dbError } = await supabase
+        .from('photos')
+        .insert({
+          name: file.name,
+          url: urlData.publicUrl,
+          storage_path: `public/${fileName}`,
+          uploaded_at: new Date().toISOString()
+        })
 
-  return {
-    photos,
-    isLoading,
-    uploadPhoto,
-    deletePhoto,
-    clearAllPhotos,
-  };
+      if (dbError) throw dbError
+
+      // Step 4: Refresh the photos list
+      await fetchPhotos()
+    } catch (err) {
+      console.error('Error uploading photo:', err)
+      setError('Failed to upload photo')
+    }
+  }
+
+  const deletePhoto = async (id: string) => {
+    try {
+      setError(null)
+
+      // Delete from database
+      const { error } = await supabase
+        .from('photos')
+        .delete()
+        .eq('id', id)
+
+      if (error) throw error
+
+      // Refresh the photos list
+      await fetchPhotos()
+    } catch (err) {
+      console.error('Error deleting photo:', err)
+      setError('Failed to delete photo')
+    }
+  }
+
+  const clearAll = async () => {
+    try {
+      setError(null)
+
+      // Delete all photos from database
+      const { error } = await supabase
+        .from('photos')
+        .delete()
+        .neq('id', '')
+
+      if (error) throw error
+
+      // Refresh the photos list
+      await fetchPhotos()
+    } catch (err) {
+      console.error('Error clearing photos:', err)
+      setError('Failed to clear photos')
+    }
+  }
+
+  return { 
+    photos, 
+    loading, 
+    error,
+    uploadPhoto, 
+    deletePhoto, 
+    clearAll 
+  }
 }
