@@ -1,0 +1,5 @@
+# Environment Variables - KEEP SECRET!
+.env
+.env.local
+.env.*.local
+.env.production.local
