@@ -43,7 +43,7 @@ export function usePhotos() {
 
       // Step 1: Upload image file to Supabase Storage
       const fileName = `${Date.now()}-${file.name}`
-      const { data: uploadData, error: uploadError } = await supabase.storage
+      const { error: uploadError } = await supabase.storage
         .from('photos')
         .upload(`public/${fileName}`, file)
 
